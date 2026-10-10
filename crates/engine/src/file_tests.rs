@@ -93,3 +93,21 @@ fn project_is_named_after_its_file() {
     assert_eq!(s.project.name, "Apollo 11 - Tranquility");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Opening the demo after a project was open used to keep that project's path, so Save wrote the demo
+/// over the other project's file.
+#[test]
+fn opening_the_demo_forgets_the_previous_projects_path() {
+    let d = temp_dir("demo-path");
+    let path = d.join("mine.fcproj").to_string_lossy().to_string();
+    let mut s = demo();
+    s.execute("sequence.addEdit", json!({"seconds": 1.0})).unwrap();
+    s.execute("file.saveAs", json!({"path": path})).unwrap();
+    let saved = std::fs::read(&path).unwrap();
+    s.execute("file.openDemoProject", json!({})).unwrap();
+    assert_eq!(s.path, None, "the demo is a new project with no file");
+    assert!(!s.is_dirty());
+    // Save has nowhere to write: it fails instead of replacing the other project
+    assert!(s.execute("file.save", json!({})).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), saved, "the saved project is untouched");
+}
