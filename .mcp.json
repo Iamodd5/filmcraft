@@ -7,6 +7,14 @@
     "filmcraft-headless": {
       "command": "target/release/filmcraft-cli",
       "args": ["mcp", "--demo"]
+    },
+    "filmcraft-agent": {
+      "command": "target/release/filmcraft-mcp",
+      "args": ["--demo"]
+    },
+    "filmcraft-agent-live": {
+      "command": "target/release/filmcraft-mcp",
+      "args": ["--live", "127.0.0.1:9876"]
     }
   }
 }

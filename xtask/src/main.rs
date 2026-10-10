@@ -76,6 +76,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("automation", 5),
     ("filmcraft", 6),
     ("cli", 6),
+    ("mcp", 6),
     ("web", 6),
 ];
 

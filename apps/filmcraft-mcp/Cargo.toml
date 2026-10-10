@@ -1,0 +1,18 @@
+[package]
+name = "filmcraft-mcp"
+description = "FilmCraft agent MCP server: every command and UI control, verified timeline edits with automatic rollback"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "filmcraft-mcp"
+path = "src/main.rs"
+
+[dependencies]
+filmcraft-engine = { workspace = true }
+filmcraft-platform = { workspace = true }
+serde_json = { workspace = true }

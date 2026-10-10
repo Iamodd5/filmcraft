@@ -225,6 +225,70 @@ on desktop, a download on web). It exports sequence markers only, not clip/sourc
 reports are limited to 100000 markers and a conservative 16 MiB output budget. Invalid timing or a
 failed write reports an error. The menu opens the normal save dialog; cancelling writes nothing.
 
+## 2c. Agent editing server (`filmcraft-mcp`)
+
+`filmcraft-mcp` (`apps/filmcraft-mcp`) is an MCP server (stdio) built for an agent that does all of the
+editing while a person only reviews the timeline. It is separate from `filmcraft-cli mcp`: its own
+JSON-RPC and MCP implementation on the engine, no async runtime, no shared code with `crates/automation`.
+
+```sh
+cargo build --release -p filmcraft-mcp
+claude mcp add filmcraft-agent -- /abs/path/target/release/filmcraft-mcp --demo      # or --project p.fcproj, or no flag
+./target/release/filmcraft --control 9876 &                                          # then, to drive the app:
+claude mcp add filmcraft-agent-live -- /abs/path/target/release/filmcraft-mcp --live 127.0.0.1:9876
+```
+
+The repository's `.mcp.json` registers `filmcraft-agent` (headless demo) and `filmcraft-agent-live`.
+
+| Tool | Purpose |
+|---|---|
+| `commands` | search every command by words (id, label, menu path); no arguments shows how they are grouped |
+| `command_describe` | one command: parameters, enabled now and, if not, why; a mistyped id gets near matches |
+| `query` | run a read-only command; one that turns out to change the project is undone and reported |
+| `inspect` | project tree, sequence (clip and track ids, ticks and frames), editor state, undo history |
+| `review` | verdict (`clean` / `warnings` / `errors`), every issue, tracks, clips in frames, markers, a text map of the tracks |
+| `edit` | one or more commands as ONE all-or-nothing edit (below) |
+| `frames` | render program frames as inline PNGs (`seconds`, or `count` samples across the sequence); a time past the end is an error |
+| `checkpoint` | `create` / `restore` / `list` / `drop` a mark in the undo history |
+| `project` | `info`, `demo`, `new`, `open`, `save`, `save_as`; refuses to replace unsaved work; a save must leave a non-empty file |
+| `import` | media files by absolute path, checked first, as one verified edit |
+| `export` | render and wait; refuses a timeline with errors; checks a new non-empty file was written |
+| `ui` | with `--live`: `elements`, `click`, `drag`, `scroll`, `key`, `type`, `move`, `playback`, `panel`, `set`, `screenshot`, `inspect`, `call` (any `ui.*` method) |
+
+**What `edit` guarantees.** Before the steps it reads the timeline and the issues it already has. After
+them it reads it again. Any of these undoes every step: a step fails, the edit introduces an invariant
+error (clips overlapping on a track, a clip with no length or no source, a transition that points at a
+clip that is gone, a sequence length that disagrees with its clips), or an `expect` condition is false.
+After an undo it checks the timeline is exactly what it was and says so loudly (`rollbackWarning`) when it
+is not. `dry_run` does the same and always undoes, so an agent can preview. The reply lists what changed
+(clips added, removed, moved, trimmed, re-tracked), the verdict after, and any new warnings (a gap that
+flashes black, linked picture and sound that drifted apart, a clip running past its media).
+
+`expect` keys: `durationFrames` (number or `{min, max}`), `clipCount`, `trackClipCount` (`{"Video 1": 3}`),
+`clipsPresent`, `clipsAbsent`, `unchangedClips`, `onlyChanging` (the only existing clips the edit may
+change or remove), `maxAddedClips`, `noGaps`, `noWarnings`.
+
+Commands that replace the project (`file.open`, `file.newProject`, `file.openDemoProject`, close and revert),
+write it (`file.save*`) or render (`file.exportMedia`) are refused inside `edit`: use `project` and `export`.
+
+**Coverage, stated plainly.** Headless, every one of the engine's commands is reachable through
+`commands` and `edit` (the same registry the menus, panels and shortcuts use). Controls that exist only in
+the desktop UI (tool selection, panel and workspace toggles, monitor view settings, a drag in the timeline)
+need `--live`, which speaks the app's control channel; `ui` `elements` lists the clickable ids. Whether
+*every* widget has an automation id is not proven: `crates/ui-egui/tests/agent_coverage_ui.rs` checks only
+the stock egui widgets, because most controls are custom-painted and never reach the accessibility tree.
+
+**Limits.**
+- Rollback and checkpoints use the undo history. Things undo does not cover (an export, a file written by
+  `file.export*`, selection and playhead) are not rolled back; `notUndoable` names such steps. A checkpoint
+  cannot be restored after history was rewritten (undo, then a different edit): it refuses and changes nothing.
+- A blocking `export` returns when the file is written; there are no progress notifications or cancellation yet
+  (use `filmcraft-cli mcp` for those).
+- The 2026-07-28 MCP revision (`server/discover`, `resultType`, `ttlMs`, `cacheScope`) is implemented from the
+  requirements recorded for the other server and covered by this crate's own tests, not by a real 2026-07-28 client.
+- Tests: `cargo test -p filmcraft-mcp` (unit tests plus end-to-end tests of the real binary over stdio, including a
+  mock of the app's control channel).
+
 ## 3. Verifying UI work
 
 For any UI change, look at the result:
